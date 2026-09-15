@@ -100,6 +100,7 @@
       <div><label>Year</label><input type="number" id="mYear"></div>
       <div><label>Mileage</label><input type="number" id="mMileage"></div>
       <div><label>Price ($)</label><input type="number" id="mPrice"></div>
+      <div><label>Listing URL (optional)</label><input type="text" id="mUrl" placeholder="https://cars.ksl.com/listing/..."></div>
       <div><label>Source</label>
         <select id="mSource">
           <option value="ksl">KSL</option>
@@ -161,6 +162,15 @@
     <p class="note" id="dealsEmpty"></p>
   </div>
 
+  <div class="card">
+    <h2>Top deals across everything</h2>
+    <p class="note" style="margin-top:0">Ranked by standard deviations below each listing's own model trend — this is what makes a Corolla deal and a Civic deal comparable.</p>
+    <table>
+      <thead><tr><th>Listing</th><th>Make</th><th>Model</th><th>Price</th><th>vs. everything</th></tr></thead>
+      <tbody id="topDealsBody"></tbody>
+    </table>
+  </div>
+
   <div class="card" id="editCard" style="display:none;">
     <h2>Edit listing</h2>
     <div class="add-form">
@@ -177,6 +187,7 @@
       </div>
       <div><label>Estimated repair cost ($, optional)</label><input type="number" id="eRepairCost"></div>
       <div><label>Repair notes</label><input type="text" id="eRepairNotes" placeholder="e.g. quoted $200 for leak"></div>
+      <div><label>Listing URL</label><input type="text" id="eUrl" placeholder="https://cars.ksl.com/listing/..."></div>
     </div>
     <div style="margin-top:10px;">
       <label style="font-size:0.78rem; color:var(--muted); display:block; margin-bottom:4px;">General notes</label>
@@ -200,6 +211,12 @@
     <select id="chartModelSelect" onchange="drawChart()"></select>
     <canvas id="chart"></canvas>
     <p class="note">Trend line shown at the model's average mileage, since the underlying fit uses both age and mileage.</p>
+  </div>
+
+  <div class="card">
+    <h2>All listings at a glance</h2>
+    <p class="note" style="margin-top:0">Actual price vs. predicted price, across every model at once. The dashed line is "priced exactly at trend" — points below it are underpriced, points far off the line either way are worth a second look (could be a great deal, could be bad data).</p>
+    <canvas id="allChart"></canvas>
   </div>
 
   <div class="card">
@@ -227,6 +244,7 @@ let lastValidRows = [];
 let sortField = "pctOff";
 let sortDir = "asc";
 let chart = null;
+let allChart = null;
 let parsedRows = [];
 let editingId = null;
 let backendUrl = "";
@@ -294,7 +312,7 @@ function normalizeServerRow(r) {
     status: r.status || "new",
     damaged: r.damaged === true || r.damaged === "true" || r.damaged === "TRUE",
     repairNotes: r.repairNotes || "", estRepairCost: r.estRepairCost === "" ? null : Number(r.estRepairCost),
-    notes: r.notes || "", source: r.source || "manual"
+    notes: r.notes || "", source: r.source || "manual", url: r.url || ""
   };
 }
 
@@ -387,6 +405,7 @@ function recompute() {
   buildRows(valid);
   populateSelects();
   drawChart();
+  drawAllChart();
 }
 
 function buildRows(valid) {
@@ -403,6 +422,22 @@ function buildRows(valid) {
   });
   lastValidRows = rows;
   renderDealsBody();
+  renderTopDeals();
+}
+
+function renderTopDeals() {
+  const ranked = lastValidRows.filter(r => r.zscore !== null && r.status !== "passed")
+    .slice().sort((a,b) => a.zscore - b.zscore).slice(0, 8);
+  const body = document.getElementById("topDealsBody");
+  if (!body) return;
+  body.innerHTML = ranked.map(r => {
+    const label = r.title && r.title.trim() ? r.title : `${r.year} ${r.make} ${r.model}`;
+    return `<tr onclick="openEdit('${r.id}')" style="cursor:pointer">
+      <td>${label}</td><td>${r.make}</td><td>${r.model}</td>
+      <td>$${r.price.toLocaleString()}</td>
+      <td><span class="badge badge-good">${r.zscore.toFixed(1)}σ below</span></td>
+    </tr>`;
+  }).join("") || '<tr><td colspan="5" class="empty">No ranked deals yet — need 5+ clean comps in at least one model.</td></tr>';
 }
 
 function renderGroupSummary() {
@@ -455,6 +490,7 @@ function renderDealsBody() {
   emptyMsg.textContent = "";
   body.innerHTML = rows.map(r => {
     const listingLabel = r.title && r.title.trim() ? r.title : `${r.year} ${r.make} ${r.model}`;
+    const listingCell = r.url ? `<a href="${r.url.replace(/"/g,'&quot;')}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent)">${listingLabel} 🔗</a>` : listingLabel;
     const statusBadge = `<span class="status-badge status-${r.status}">${statusLabel(r.status)}</span>`;
     const damageBadge = r.damaged ? `<span class="damage-badge">DAMAGED${r.estRepairCost ? " ~$"+r.estRepairCost.toLocaleString() : ""}</span>` : "";
     const notesText = [r.notes, r.repairNotes].filter(Boolean).join(" · ");
@@ -471,7 +507,7 @@ function renderDealsBody() {
     }
     const isGoodDeal = r.residual !== null && r.residual < -300;
     return `<tr class="${isGoodDeal ? 'deal-good' : ''}" style="cursor:pointer" onclick="openEdit('${r.id}')">
-      <td>${listingLabel}</td><td>${r.make}</td><td>${r.model}</td><td>${r.year}</td>
+      <td>${listingCell}</td><td>${r.make}</td><td>${r.model}</td><td>${r.year}</td>
       <td>${r.mileage.toLocaleString()}</td><td>$${r.price.toLocaleString()}</td>
       ${modelCell}${zCell}
       <td>${statusBadge}</td>
@@ -492,6 +528,7 @@ function openEdit(id) {
   document.getElementById("eDamaged").value = row.damaged ? "true" : "false";
   document.getElementById("eRepairCost").value = row.estRepairCost || "";
   document.getElementById("eRepairNotes").value = row.repairNotes || "";
+  document.getElementById("eUrl").value = row.url || "";
   document.getElementById("eNotes").value = row.notes || "";
   document.getElementById("editCard").style.display = "";
   const editCard = document.getElementById("editCard");
@@ -512,7 +549,8 @@ async function saveEdit() {
     damaged: document.getElementById("eDamaged").value === "true",
     estRepairCost: document.getElementById("eRepairCost").value === "" ? "" : Number(document.getElementById("eRepairCost").value),
     repairNotes: document.getElementById("eRepairNotes").value,
-    notes: document.getElementById("eNotes").value
+    notes: document.getElementById("eNotes").value,
+    url: document.getElementById("eUrl").value.trim()
   };
   try {
     const result = await apiPost({action: "update", id: editingId, fields});
@@ -567,7 +605,8 @@ async function addManualListing() {
     year: Number(document.getElementById("mYear").value),
     mileage: Number(document.getElementById("mMileage").value),
     price: Number(document.getElementById("mPrice").value),
-    source: document.getElementById("mSource").value
+    source: document.getElementById("mSource").value,
+    url: document.getElementById("mUrl").value.trim()
   };
   const flag = document.getElementById("manualAddFlag");
   if (!row.make || !row.model || !row.year || isNaN(row.mileage) || isNaN(row.price)) {
@@ -585,7 +624,7 @@ async function addManualListing() {
     } else {
       flag.textContent = "Added.";
       flag.style.color = "var(--good)";
-      ["mTitle","mMake","mModel","mYear","mMileage","mPrice"].forEach(id => document.getElementById(id).value = "");
+      ["mTitle","mMake","mModel","mYear","mMileage","mPrice","mUrl"].forEach(id => document.getElementById(id).value = "");
     }
     await refreshFromServer();
   } catch (err) {
@@ -704,6 +743,40 @@ function populateSelects() {
   chartSel.innerHTML = opts; checkSel.innerHTML = opts;
   if (validKeys.includes(prevChart)) chartSel.value = prevChart;
   if (validKeys.includes(prevCheck)) checkSel.value = prevCheck;
+}
+
+function drawAllChart() {
+  const ctx = document.getElementById("allChart");
+  if (!ctx) return;
+  if (allChart) { allChart.destroy(); allChart = null; }
+  const rows = lastValidRows.filter(r => r.predicted !== null);
+  if (rows.length === 0) return;
+  const clean = rows.filter(r => !r.damaged).map(r => ({x: Math.round(r.predicted), y: r.price, title: r.title||(r.year+" "+r.make+" "+r.model)}));
+  const damaged = rows.filter(r => r.damaged).map(r => ({x: Math.round(r.predicted), y: r.price, title: r.title||(r.year+" "+r.make+" "+r.model)}));
+  const allX = rows.map(r => r.predicted), allY = rows.map(r => r.price);
+  const lo = Math.min(...allX, ...allY), hi = Math.max(...allX, ...allY);
+  allChart = new Chart(ctx, {
+    type: "scatter",
+    data: { datasets: [
+      { label: "Listings", data: clean, backgroundColor: "#2563eb", pointRadius: 5 },
+      { label: "Flagged damaged", data: damaged, backgroundColor: "#dc2626", pointRadius: 5 },
+      { label: "Predicted = Actual", data: [{x:lo,y:lo},{x:hi,y:hi}], type:"line", borderColor:"#9ca3af", borderDash:[5,5], borderWidth:1.5, pointRadius:0, fill:false }
+    ]},
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: { callbacks: { label: (ctx) => {
+          const p = ctx.raw;
+          return p.title + ": $" + p.y.toLocaleString() + " (predicted $" + p.x.toLocaleString() + ")";
+        }}}
+      },
+      scales: {
+        x: { title: { display: true, text: "Predicted price ($)" } },
+        y: { title: { display: true, text: "Actual price ($)" } }
+      }
+    }
+  });
 }
 
 function drawChart() {
