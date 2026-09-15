@@ -137,6 +137,31 @@
       <button class="secondary" onclick="refreshFromServer()">Refresh</button>
       <button class="danger" onclick="clearAllConfirm()">Clear all (everyone)</button>
     </div>
+    <div class="add-form" style="margin-bottom:12px;">
+      <div><label>Make contains</label><input type="text" id="fMake" oninput="renderDealsBody()" placeholder="e.g. Toyota"></div>
+      <div><label>Model contains</label><input type="text" id="fModel" oninput="renderDealsBody()" placeholder="e.g. Camry"></div>
+      <div><label>Year: from</label><input type="number" id="fYearMin" oninput="renderDealsBody()" placeholder="e.g. 2012"></div>
+      <div><label>Year: to</label><input type="number" id="fYearMax" oninput="renderDealsBody()"></div>
+      <div><label>Max mileage</label><input type="number" id="fMileageMax" oninput="renderDealsBody()" placeholder="e.g. 200000"></div>
+      <div><label>Max price ($)</label><input type="number" id="fPriceMax" oninput="renderDealsBody()" placeholder="e.g. 10000"></div>
+      <div><label>Status</label>
+        <select id="fStatus" onchange="renderDealsBody()">
+          <option value="">Any</option>
+          <option value="new">New</option>
+          <option value="viewed">Viewed</option>
+          <option value="contacted">Contacted</option>
+          <option value="passed">Passed</option>
+        </select>
+      </div>
+      <div><label>Damaged</label>
+        <select id="fDamaged" onchange="renderDealsBody()">
+          <option value="">Any</option>
+          <option value="no">No</option>
+          <option value="yes">Yes</option>
+        </select>
+      </div>
+      <div style="justify-content:flex-end;"><button class="secondary" onclick="clearFilters()">Clear filters</button></div>
+    </div>
     <div class="table-scroll">
     <table id="dealsTable">
       <thead>
@@ -455,10 +480,42 @@ function renderGroupSummary() {
   }).join("");
 }
 
+function clearFilters() {
+  ["fMake","fModel","fYearMin","fYearMax","fMileageMax","fPriceMax"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("fStatus").value = "";
+  document.getElementById("fDamaged").value = "";
+  renderDealsBody();
+}
+
+function applyFilters(rows) {
+  const get = id => document.getElementById(id).value.trim();
+  const makeF = get("fMake").toLowerCase();
+  const modelF = get("fModel").toLowerCase();
+  const yearMin = get("fYearMin"), yearMax = get("fYearMax");
+  const mileageMax = get("fMileageMax");
+  const priceMax = get("fPriceMax");
+  const statusF = get("fStatus");
+  const damagedF = get("fDamaged");
+
+  return rows.filter(r => {
+    if (makeF && !r.make.toLowerCase().includes(makeF)) return false;
+    if (modelF && !r.model.toLowerCase().includes(modelF)) return false;
+    if (yearMin !== "" && r.year < Number(yearMin)) return false;
+    if (yearMax !== "" && r.year > Number(yearMax)) return false;
+    if (mileageMax !== "" && r.mileage > Number(mileageMax)) return false;
+    if (priceMax !== "" && r.price > Number(priceMax)) return false;
+    if (statusF && r.status !== statusF) return false;
+    if (damagedF === "yes" && !r.damaged) return false;
+    if (damagedF === "no" && r.damaged) return false;
+    return true;
+  });
+}
+
 function renderDealsBody() {
   let rows = lastValidRows.slice();
   const hidePassed = document.getElementById("hidePassedCheck") && document.getElementById("hidePassedCheck").checked;
   if (hidePassed) rows = rows.filter(r => r.status !== "passed");
+  rows = applyFilters(rows);
 
   rows.sort((a,b) => {
     if (!["title","make","model","status"].includes(sortField)) {
