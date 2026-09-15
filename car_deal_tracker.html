@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Car Deal Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f8fb; --card: #ffffff; --border: #e2e5ec; --text: #1f2430; --muted: #6b7280;
+    --accent: #2563eb; --good: #16a34a; --good-bg: #ecfdf3; --bad: #dc2626;
+    --warn: #c2410c; --warn-bg: #fff7ed;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); margin: 0; padding: 24px 16px 60px; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .sub { color: var(--muted); margin-top: 0; margin-bottom: 24px; font-size: 0.95rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin-bottom: 20px; }
+  .card h2 { font-size: 1.05rem; margin: 0 0 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 6px 6px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.78rem; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--text); }
+  .sort-arrow { font-size: 0.68rem; }
+  input[type=text], input[type=number], select {
+    width: 100%; padding: 6px 7px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 0.85rem; background: #fbfbfd;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+  button { background: var(--accent); color: white; border: none; padding: 9px 16px; border-radius: 8px;
+    font-size: 0.85rem; cursor: pointer; font-weight: 600; }
+  button.secondary { background: #eef0f4; color: var(--text); }
+  button.danger { background: #fde8e8; color: var(--bad); }
+  button:hover { filter: brightness(0.95); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .del-btn { background: none; color: var(--bad); font-weight: 700; padding: 2px 8px; font-size: 1rem; }
+  .table-scroll { overflow-x: auto; }
+  .note { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
+  .empty { color: var(--muted); font-style: italic; font-size: 0.88rem; }
+  textarea { width: 100%; min-height: 90px; padding: 8px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 0.85rem; font-family: inherit; background: #fbfbfd; resize: vertical; }
+  .group-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-top: 6px; }
+  .group-box { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 0.85rem; }
+  .group-box .name { font-weight: 700; margin-bottom: 4px; }
+  .r2-weak { color: var(--warn); }
+  .deal-good { background: var(--good-bg); }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+  .badge-good { background: var(--good); color: white; }
+  .status-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+  .status-new { background: #eef0f4; color: var(--muted); }
+  .status-viewed { background: #e0f2fe; color: #075985; }
+  .status-contacted { background: #fef9c3; color: #854d0e; }
+  .status-passed { background: #f3f4f6; color: #9ca3af; text-decoration: line-through; }
+  .damage-badge { background: #fee2e2; color: #991b1b; font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
+  .notes-cell { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .checker-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
+  .checker-grid label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+  .verdict { margin-top: 14px; padding: 12px 14px; border-radius: 8px; font-size: 0.92rem; display: none; }
+  .verdict.show { display: block; }
+  .verdict.good { background: var(--good-bg); color: #14532d; }
+  .verdict.bad { background: #fef2f2; color: #7f1d1d; }
+  .verdict.neutral { background: #f1f5f9; color: #334155; }
+  canvas { max-height: 380px; }
+  .filter-row { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; font-size: 0.85rem; flex-wrap: wrap; }
+  .conn-status { font-size: 0.82rem; padding: 4px 0; }
+  .conn-ok { color: var(--good); }
+  .conn-bad { color: var(--bad); }
+  .conn-pending { color: var(--muted); }
+  .add-form { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 4px; }
+  .add-form > div { display: flex; flex-direction: column; gap: 3px; }
+  .add-form label { font-size: 0.72rem; color: var(--muted); }
+  .checkbox-cell { text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Car Deal Tracker</h1>
+  <p class="sub">Shared across everyone with this backend URL — one Google Sheet behind it, so edits sync for anyone using the tool.</p>
+
+  <div class="card">
+    <h2>Backend</h2>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <input type="text" id="backendUrl" placeholder="Paste your Apps Script Web App URL here" style="flex:1; min-width:280px;">
+      <button onclick="connectBackend()">Connect</button>
+    </div>
+    <div class="conn-status conn-pending" id="connStatus">Not connected yet.</div>
+    <p class="note">This URL is saved in this browser only (not shared). Get it from Apps Script: Deploy → New deployment → Web app. See the Code.gs file for setup steps.</p>
+  </div>
+
+  <div class="card">
+    <h2>Add a listing manually</h2>
+    <p class="note" style="margin-top:0">For anything you find outside KSL search results — Facebook Marketplace, a friend's tip, a dealer lot — or just to add one KSL listing by hand.</p>
+    <div class="add-form">
+      <div><label>Listing title</label><input type="text" id="mTitle" placeholder="e.g. 2011 Toyota Corolla LE"></div>
+      <div><label>Make</label><input type="text" id="mMake"></div>
+      <div><label>Model</label><input type="text" id="mModel"></div>
+      <div><label>Year</label><input type="number" id="mYear"></div>
+      <div><label>Mileage</label><input type="number" id="mMileage"></div>
+      <div><label>Price ($)</label><input type="number" id="mPrice"></div>
+      <div><label>Source</label>
+        <select id="mSource">
+          <option value="ksl">KSL</option>
+          <option value="facebook">Facebook</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div style="justify-content:flex-end;"><button onclick="addManualListing()">Add listing</button></div>
+    </div>
+    <div class="note" id="manualAddFlag"></div>
+  </div>
+
+  <div class="card">
+    <h2>Paste listings from KSL</h2>
+    <p class="note" style="margin-top:0">Paste as much as you copied — a full search-results page works. Duplicates (matched by listing title) are skipped automatically by the backend, so re-pasting the same search is safe.</p>
+    <textarea id="pasteBox" placeholder="Paste KSL listing(s) here..."></textarea>
+    <div class="row-actions">
+      <button class="secondary" onclick="parsePaste()">Parse</button>
+    </div>
+    <div class="note" id="parseFlag"></div>
+    <table id="parsePreviewTable" style="display:none; margin-top:12px;">
+      <thead><tr><th>Listing</th><th>Make</th><th>Model</th><th>Year</th><th>Mileage</th><th>Price</th><th></th></tr></thead>
+      <tbody id="parsePreviewBody"></tbody>
+    </table>
+    <div class="row-actions" id="parseCommitRow" style="display:none;">
+      <button onclick="commitPaste()">Add <span id="parseCount">0</span> to shared tracker</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>All tracked listings</h2>
+    <div class="filter-row">
+      <label><input type="checkbox" id="hidePassedCheck" onchange="renderDealsBody()"> Hide passed</label>
+      <button class="secondary" onclick="refreshFromServer()">Refresh</button>
+      <button class="danger" onclick="clearAllConfirm()">Clear all (everyone)</button>
+    </div>
+    <div class="table-scroll">
+    <table id="dealsTable">
+      <thead>
+        <tr>
+          <th class="sortable" onclick="sortBy('title')">Listing <span class="sort-arrow" data-field="title"></span></th>
+          <th class="sortable" onclick="sortBy('make')">Make <span class="sort-arrow" data-field="make"></span></th>
+          <th class="sortable" onclick="sortBy('model')">Model <span class="sort-arrow" data-field="model"></span></th>
+          <th class="sortable" onclick="sortBy('year')">Year <span class="sort-arrow" data-field="year"></span></th>
+          <th class="sortable" onclick="sortBy('mileage')">Miles <span class="sort-arrow" data-field="mileage"></span></th>
+          <th class="sortable" onclick="sortBy('price')">Price <span class="sort-arrow" data-field="price"></span></th>
+          <th class="sortable" onclick="sortBy('pctOff')">vs. model</th>
+          <th class="sortable" onclick="sortBy('zscore')">vs. everything</th>
+          <th class="sortable" onclick="sortBy('status')">Status <span class="sort-arrow" data-field="status"></span></th>
+          <th>Damaged?</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="dealsBody"></tbody>
+    </table>
+    </div>
+    <p class="note">Click a column header to sort. "vs. model" compares to same make/model's own price trend; "vs. everything" is a normalized score so you can compare a Corolla deal against a Civic deal fairly. Click a row to edit its status/notes/damage.</p>
+    <p class="note" id="dealsEmpty"></p>
+  </div>
+
+  <div class="card" id="editCard" style="display:none;">
+    <h2>Edit listing</h2>
+    <div class="add-form">
+      <div><label>Status</label>
+        <select id="eStatus">
+          <option value="new">New</option>
+          <option value="viewed">Viewed</option>
+          <option value="contacted">Contacted</option>
+          <option value="passed">Passed</option>
+        </select>
+      </div>
+      <div><label>Damaged / needs repair?</label>
+        <select id="eDamaged"><option value="false">No</option><option value="true">Yes</option></select>
+      </div>
+      <div><label>Estimated repair cost ($, optional)</label><input type="number" id="eRepairCost"></div>
+      <div><label>Repair notes</label><input type="text" id="eRepairNotes" placeholder="e.g. quoted $200 for leak"></div>
+    </div>
+    <div style="margin-top:10px;">
+      <label style="font-size:0.78rem; color:var(--muted); display:block; margin-bottom:4px;">General notes</label>
+      <textarea id="eNotes" style="min-height:60px;"></textarea>
+    </div>
+    <div class="row-actions">
+      <button onclick="saveEdit()">Save</button>
+      <button class="secondary" onclick="closeEdit()">Cancel</button>
+      <button class="danger" onclick="deleteEdit()">Delete listing</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Trend by model</h2>
+    <div id="groupSummary" class="group-summary"></div>
+    <p class="note">Damaged/needs-repair listings are excluded from these trend fits, so the trend reflects "healthy" market price. Need 5+ clean listings for a model before it gets its own line.</p>
+  </div>
+
+  <div class="card">
+    <h2>Chart</h2>
+    <select id="chartModelSelect" onchange="drawChart()"></select>
+    <canvas id="chart"></canvas>
+    <p class="note">Trend line shown at the model's average mileage, since the underlying fit uses both age and mileage.</p>
+  </div>
+
+  <div class="card">
+    <h2>Check a specific listing</h2>
+    <div class="checker-grid">
+      <div><label>Make / Model</label><select id="checkModelSelect"></select></div>
+      <div><label>Year</label><input type="number" id="checkYear"></div>
+      <div><label>Mileage</label><input type="number" id="checkMileage"></div>
+      <div><label>Asking price ($)</label><input type="number" id="checkPrice"></div>
+      <div><button onclick="checkListing()">Check</button></div>
+    </div>
+    <div id="verdictBox" class="verdict"></div>
+  </div>
+</div>
+
+<script>
+const STATUS_OPTIONS = [
+  {v:"new", l:"New"}, {v:"viewed", l:"Viewed"}, {v:"contacted", l:"Contacted"}, {v:"passed", l:"Passed"}
+];
+const KNOWN_MAKES = ["Toyota","Honda","Ford","Chevrolet","Chevy","Nissan","Mazda","Subaru","Hyundai","Kia","Lexus","Volkswagen","VW","Dodge","Jeep","GMC","Buick","Chrysler","Acura","Infiniti","Mitsubishi","Ram","Cadillac","Lincoln","Volvo","Mini","Scion"];
+
+let data = [];          // cache of rows from the server, each with a stable server-side `id`
+let groupStats = {};    // key -> regression fit for that make/model (clean comps only)
+let lastValidRows = [];
+let sortField = "pctOff";
+let sortDir = "asc";
+let chart = null;
+let parsedRows = [];
+let editingId = null;
+let backendUrl = "";
+
+// ---------- backend wiring ----------
+
+function statusOptionsHtml(current) {
+  return STATUS_OPTIONS.map(o => `<option value="${o.v}" ${current===o.v ? "selected" : ""}>${o.l}</option>`).join("");
+}
+function statusLabel(v) {
+  const o = STATUS_OPTIONS.find(s => s.v === v);
+  return o ? o.l : "New";
+}
+
+function setConnStatus(text, cls) {
+  const el = document.getElementById("connStatus");
+  el.textContent = text;
+  el.className = "conn-status " + cls;
+}
+
+function connectBackend() {
+  const url = document.getElementById("backendUrl").value.trim();
+  if (!url) { setConnStatus("Enter a Web App URL first.", "conn-bad"); return; }
+  backendUrl = url;
+  try { localStorage.setItem("car_tracker_backend_url", url); } catch (e) {}
+  setConnStatus("Connecting…", "conn-pending");
+  refreshFromServer();
+}
+
+async function apiGet(params) {
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(backendUrl + (backendUrl.includes("?") ? "&" : "?") + qs, {method: "GET"});
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+async function apiPost(payload) {
+  // text/plain avoids a CORS preflight that Apps Script web apps don't handle
+  const res = await fetch(backendUrl, {
+    method: "POST",
+    headers: {"Content-Type": "text/plain;charset=utf-8"},
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+async function refreshFromServer() {
+  if (!backendUrl) return;
+  try {
+    const result = await apiGet({action: "list"});
+    if (!result.ok) throw new Error(result.error || "unknown error");
+    data = result.rows.map(normalizeServerRow);
+    setConnStatus(`Connected — ${data.length} listing${data.length===1?"":"s"} in the shared tracker.`, "conn-ok");
+    recompute();
+  } catch (err) {
+    setConnStatus("Couldn't reach the backend: " + err.message + ". Check the URL and that it's deployed with access set to \"Anyone\".", "conn-bad");
+  }
+}
+
+function normalizeServerRow(r) {
+  return {
+    id: r.id, title: r.title || "", make: r.make || "", model: r.model || "",
+    year: Number(r.year) || 0, mileage: Number(r.mileage) || 0, price: Number(r.price) || 0,
+    status: r.status || "new",
+    damaged: r.damaged === true || r.damaged === "true" || r.damaged === "TRUE",
+    repairNotes: r.repairNotes || "", estRepairCost: r.estRepairCost === "" ? null : Number(r.estRepairCost),
+    notes: r.notes || "", source: r.source || "manual"
+  };
+}
+
+// ---------- regression ----------
+
+function key(m, mo) { return m.trim() + " " + mo.trim(); }
+function currentYear() { return new Date().getFullYear(); }
+
+function det3(m) {
+  return m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])
+       - m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])
+       + m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
+}
+function solve3(A, b) {
+  const D = det3(A);
+  if (Math.abs(D) < 1e-9) return null;
+  const replaceCol = (col) => A.map((row,i) => row.map((v,j) => j===col ? b[i] : v));
+  return [det3(replaceCol(0))/D, det3(replaceCol(1))/D, det3(replaceCol(2))/D];
+}
+function linreg(points) {
+  const n = points.length;
+  const sx=points.reduce((s,p)=>s+p[0],0), sy=points.reduce((s,p)=>s+p[1],0);
+  const sxy=points.reduce((s,p)=>s+p[0]*p[1],0), sxx=points.reduce((s,p)=>s+p[0]*p[0],0);
+  const denom = n*sxx - sx*sx;
+  if (denom === 0) return {slope:0, intercept: sy/n, r2:0};
+  const slope = (n*sxy - sx*sy)/denom, intercept = (sy - slope*sx)/n;
+  const meanY = sy/n;
+  const ssTot = points.reduce((s,p)=>s+Math.pow(p[1]-meanY,2),0);
+  const ssRes = points.reduce((s,p)=>s+Math.pow(p[1]-(slope*p[0]+intercept),2),0);
+  return {slope, intercept, r2: ssTot===0?0:1-(ssRes/ssTot)};
+}
+function multireg(rows) {
+  const n = rows.length;
+  let sA=0,sM=0,sP=0,sAA=0,sMM=0,sAM=0,sAP=0,sMP=0;
+  rows.forEach(r => {
+    sA+=r.age; sM+=r.mileage; sP+=r.price;
+    sAA+=r.age*r.age; sMM+=r.mileage*r.mileage; sAM+=r.age*r.mileage;
+    sAP+=r.age*r.price; sMP+=r.mileage*r.price;
+  });
+  const A=[[n,sA,sM],[sA,sAA,sAM],[sM,sAM,sMM]], b=[sP,sAP,sMP];
+  const sol = solve3(A,b);
+  let b0,b1,b2,fallback=false;
+  if (!sol) {
+    const fit = linreg(rows.map(r=>[r.age,r.price]));
+    b0=fit.intercept; b1=fit.slope; b2=0; fallback=true;
+  } else { [b0,b1,b2] = sol; }
+  const meanY = sP/n;
+  let ssTot=0, ssRes=0, residuals=[];
+  rows.forEach(r => {
+    const pred = b0+b1*r.age+b2*r.mileage;
+    ssTot += Math.pow(r.price-meanY,2);
+    ssRes += Math.pow(r.price-pred,2);
+    residuals.push(r.price-pred);
+  });
+  const r2 = ssTot===0?0:1-(ssRes/ssTot);
+  const meanResidual = residuals.reduce((a,b)=>a+b,0)/residuals.length;
+  const variance = residuals.reduce((s,r)=>s+Math.pow(r-meanResidual,2),0)/Math.max(residuals.length-1,1);
+  const stdev = Math.sqrt(variance);
+  return {b0,b1,b2,r2,fallback,meanMileage:sM/n, stdev};
+}
+function predictPrice(g, age, mileage) { return g.b0 + g.b1*age + g.b2*mileage; }
+
+// ---------- compute + render ----------
+
+function recompute() {
+  const valid = data.filter(r => r.make && r.model && r.year && !isNaN(r.price));
+  valid.forEach(r => { r.age = currentYear() - r.year; });
+
+  // fit trends on CLEAN comps only (exclude damaged/needs-repair)
+  const cleanRows = valid.filter(r => !r.damaged);
+  const groups = {};
+  cleanRows.forEach(r => {
+    const k = key(r.make, r.model);
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(r);
+  });
+
+  groupStats = {};
+  Object.keys(groups).forEach(k => {
+    const rows = groups[k];
+    if (rows.length >= 5) {
+      const fit = multireg(rows);
+      groupStats[k] = {n: rows.length, ...fit, weak: fit.r2 < 0.3, thin: rows.length < 8};
+    } else {
+      groupStats[k] = {n: rows.length, tooSmall: true};
+    }
+  });
+
+  renderGroupSummary();
+  buildRows(valid);
+  populateSelects();
+  drawChart();
+}
+
+function buildRows(valid) {
+  const rows = valid.map(r => {
+    const k = key(r.make, r.model);
+    const g = groupStats[k];
+    if (!g || g.tooSmall) return {...r, k, predicted: null, residual: null, pctOff: null, zscore: null};
+    const predicted = predictPrice(g, r.age, r.mileage);
+    const effectivePrice = r.damaged && r.estRepairCost ? r.price + r.estRepairCost : r.price;
+    const residual = effectivePrice - predicted;
+    const pctOff = predicted !== 0 ? (residual / predicted) * 100 : 0;
+    const zscore = g.stdev > 0 ? residual / g.stdev : null;
+    return {...r, k, predicted, residual, pctOff, zscore};
+  });
+  lastValidRows = rows;
+  renderDealsBody();
+}
+
+function renderGroupSummary() {
+  const el = document.getElementById("groupSummary");
+  const keys = Object.keys(groupStats);
+  if (keys.length === 0) { el.innerHTML = '<p class="empty">Add listings to see model trends.</p>'; return; }
+  el.innerHTML = keys.map(k => {
+    const g = groupStats[k];
+    if (g.tooSmall) return `<div class="group-box"><div class="name">${k}</div><div class="r2">n=${g.n} — need 5+ clean comps</div></div>`;
+    const r2Class = g.weak ? "r2-weak" : "";
+    let label = g.weak ? `R² ${g.r2.toFixed(2)} — weak trend` : `R² ${g.r2.toFixed(2)}`;
+    if (g.fallback) label += " (age-only)";
+    const thinNote = g.thin ? `<div class="r2-weak" style="font-size:0.76rem">small sample — treat loosely</div>` : "";
+    return `<div class="group-box"><div class="name">${k}</div><div class="${r2Class}">${label} (n=${g.n})</div>${thinNote}</div>`;
+  }).join("");
+}
+
+function renderDealsBody() {
+  let rows = lastValidRows.slice();
+  const hidePassed = document.getElementById("hidePassedCheck") && document.getElementById("hidePassedCheck").checked;
+  if (hidePassed) rows = rows.filter(r => r.status !== "passed");
+
+  rows.sort((a,b) => {
+    if (!["title","make","model","status"].includes(sortField)) {
+      if (a.predicted === null && b.predicted === null) return 0;
+      if (a.predicted === null) return 1;
+      if (b.predicted === null) return -1;
+    }
+    let av = a[sortField], bv = b[sortField];
+    if (typeof av === "string") { av = av.toLowerCase(); bv = (bv||"").toLowerCase(); }
+    if (av === undefined || av === null) av = "";
+    if (bv === undefined || bv === null) bv = "";
+    if (av < bv) return sortDir === "asc" ? -1 : 1;
+    if (av > bv) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  document.querySelectorAll(".sort-arrow").forEach(el => {
+    const f = el.getAttribute("data-field");
+    el.textContent = f === sortField ? (sortDir === "asc" ? "▲" : "▼") : "";
+  });
+
+  const body = document.getElementById("dealsBody");
+  const emptyMsg = document.getElementById("dealsEmpty");
+  if (rows.length === 0) {
+    body.innerHTML = "";
+    emptyMsg.textContent = lastValidRows.length === 0 ? "No listings yet." : "Nothing matches the current filter.";
+    return;
+  }
+  emptyMsg.textContent = "";
+  body.innerHTML = rows.map(r => {
+    const listingLabel = r.title && r.title.trim() ? r.title : `${r.year} ${r.make} ${r.model}`;
+    const statusBadge = `<span class="status-badge status-${r.status}">${statusLabel(r.status)}</span>`;
+    const damageBadge = r.damaged ? `<span class="damage-badge">DAMAGED${r.estRepairCost ? " ~$"+r.estRepairCost.toLocaleString() : ""}</span>` : "";
+    const notesText = [r.notes, r.repairNotes].filter(Boolean).join(" · ");
+    const notesCell = `<td class="notes-cell" title="${notesText.replace(/"/g,'&quot;')}">${notesText}</td>`;
+    let modelCell, zCell;
+    if (r.predicted === null) {
+      modelCell = `<td style="color:var(--muted)">need 5+ clean comps</td>`;
+      zCell = `<td style="color:var(--muted)">—</td>`;
+    } else {
+      const isDeal = r.residual < -300;
+      const sign = r.pctOff >= 0 ? "above" : "below";
+      modelCell = `<td>${isDeal ? `<span class="badge badge-good">${Math.abs(r.pctOff).toFixed(0)}% below</span>` : `${Math.abs(r.pctOff).toFixed(0)}% ${sign}`}</td>`;
+      zCell = r.zscore === null ? `<td>—</td>` : `<td>${r.zscore <= -1 ? `<span class="badge badge-good">${r.zscore.toFixed(1)}σ below</span>` : r.zscore.toFixed(1)+"σ"}</td>`;
+    }
+    const isGoodDeal = r.residual !== null && r.residual < -300;
+    return `<tr class="${isGoodDeal ? 'deal-good' : ''}" style="cursor:pointer" onclick="openEdit('${r.id}')">
+      <td>${listingLabel}</td><td>${r.make}</td><td>${r.model}</td><td>${r.year}</td>
+      <td>${r.mileage.toLocaleString()}</td><td>$${r.price.toLocaleString()}</td>
+      ${modelCell}${zCell}
+      <td>${statusBadge}</td>
+      <td>${damageBadge}</td>
+      ${notesCell}
+      <td><button class="del-btn" onclick="event.stopPropagation(); quickDelete('${r.id}')">&times;</button></td>
+    </tr>`;
+  }).join("");
+}
+
+// ---------- editing ----------
+
+function openEdit(id) {
+  const row = data.find(r => r.id === id);
+  if (!row) return;
+  editingId = id;
+  document.getElementById("eStatus").value = row.status;
+  document.getElementById("eDamaged").value = row.damaged ? "true" : "false";
+  document.getElementById("eRepairCost").value = row.estRepairCost || "";
+  document.getElementById("eRepairNotes").value = row.repairNotes || "";
+  document.getElementById("eNotes").value = row.notes || "";
+  document.getElementById("editCard").style.display = "";
+  const editCard = document.getElementById("editCard");
+  if (typeof editCard.scrollIntoView === "function") {
+    editCard.scrollIntoView({behavior: "smooth", block: "center"});
+  }
+}
+
+function closeEdit() {
+  editingId = null;
+  document.getElementById("editCard").style.display = "none";
+}
+
+async function saveEdit() {
+  if (!editingId) return;
+  const fields = {
+    status: document.getElementById("eStatus").value,
+    damaged: document.getElementById("eDamaged").value === "true",
+    estRepairCost: document.getElementById("eRepairCost").value === "" ? "" : Number(document.getElementById("eRepairCost").value),
+    repairNotes: document.getElementById("eRepairNotes").value,
+    notes: document.getElementById("eNotes").value
+  };
+  try {
+    const result = await apiPost({action: "update", id: editingId, fields});
+    if (!result.ok) throw new Error(result.error || "update failed");
+    const row = data.find(r => r.id === editingId);
+    if (row) Object.assign(row, fields);
+    closeEdit();
+    recompute();
+  } catch (err) {
+    alert("Couldn't save: " + err.message);
+  }
+}
+
+async function deleteEdit() {
+  if (!editingId) return;
+  if (!confirm("Delete this listing for everyone using this tracker?")) return;
+  await quickDelete(editingId);
+  closeEdit();
+}
+
+async function quickDelete(id) {
+  try {
+    const result = await apiPost({action: "delete", id});
+    if (!result.ok) throw new Error(result.error || "delete failed");
+    data = data.filter(r => r.id !== id);
+    recompute();
+  } catch (err) {
+    alert("Couldn't delete: " + err.message);
+  }
+}
+
+async function clearAllConfirm() {
+  if (data.length === 0) return;
+  if (!confirm(`Clear all ${data.length} listings for EVERYONE using this tracker? This can't be undone.`)) return;
+  try {
+    const result = await apiPost({action: "clearAll"});
+    if (!result.ok) throw new Error(result.error || "clear failed");
+    data = [];
+    recompute();
+  } catch (err) {
+    alert("Couldn't clear: " + err.message);
+  }
+}
+
+// ---------- manual add ----------
+
+async function addManualListing() {
+  const row = {
+    title: document.getElementById("mTitle").value.trim(),
+    make: document.getElementById("mMake").value.trim(),
+    model: document.getElementById("mModel").value.trim(),
+    year: Number(document.getElementById("mYear").value),
+    mileage: Number(document.getElementById("mMileage").value),
+    price: Number(document.getElementById("mPrice").value),
+    source: document.getElementById("mSource").value
+  };
+  const flag = document.getElementById("manualAddFlag");
+  if (!row.make || !row.model || !row.year || isNaN(row.mileage) || isNaN(row.price)) {
+    flag.textContent = "Fill in make, model, year, mileage, and price.";
+    flag.style.color = "var(--warn)";
+    return;
+  }
+  if (!backendUrl) { flag.textContent = "Connect to the backend first."; flag.style.color = "var(--warn)"; return; }
+  try {
+    const result = await apiPost({action: "addOne", row});
+    if (!result.ok) throw new Error(result.error || "add failed");
+    if (result.skipped > 0) {
+      flag.textContent = "Already in the tracker (matched by title/year/make/model/price) — not added again.";
+      flag.style.color = "var(--muted)";
+    } else {
+      flag.textContent = "Added.";
+      flag.style.color = "var(--good)";
+      ["mTitle","mMake","mModel","mYear","mMileage","mPrice"].forEach(id => document.getElementById(id).value = "");
+    }
+    await refreshFromServer();
+  } catch (err) {
+    flag.textContent = "Couldn't add: " + err.message;
+    flag.style.color = "var(--bad)";
+  }
+}
+
+// ---------- KSL paste parser ----------
+
+function parseMultipleListings(text) {
+  const lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  const titleRegex = new RegExp("^(\\d{4})\\s+(" + KNOWN_MAKES.join("|") + ")\\s+(\\S+)", "i");
+  const mileageRegex = /^([\d,]+)\s*Miles\b/i;
+  const priceRegex = /^\$([\d,]+)\s*$/;
+  const results = [];
+  let current = null, lastTitleLine = null;
+
+  lines.forEach(line => {
+    const titleMatch = line.match(titleRegex);
+    if (titleMatch) {
+      if (line === lastTitleLine) return;
+      lastTitleLine = line;
+      current = {
+        title: line, make: titleMatch[2], model: titleMatch[3].replace(/[.,]+$/, ""),
+        year: parseInt(titleMatch[1]), mileage: null, price: null, source: "ksl"
+      };
+      return;
+    }
+    const mileMatch = line.match(mileageRegex);
+    if (mileMatch && current && current.mileage === null) {
+      current.mileage = parseInt(mileMatch[1].replace(/,/g, ""));
+      return;
+    }
+    const priceMatch = line.match(priceRegex);
+    if (priceMatch && current && current.price === null) {
+      current.price = parseInt(priceMatch[1].replace(/,/g, ""));
+      if (current.mileage !== null) results.push(current);
+      current = null; lastTitleLine = null;
+    }
+  });
+  return results;
+}
+
+function parsePaste() {
+  const text = document.getElementById("pasteBox").value;
+  const flag = document.getElementById("parseFlag");
+  parsedRows = parseMultipleListings(text);
+  if (parsedRows.length === 0) {
+    document.getElementById("parsePreviewTable").style.display = "none";
+    document.getElementById("parseCommitRow").style.display = "none";
+    flag.textContent = "Couldn't find any complete listings (year + make + mileage + price) in that text.";
+    return;
+  }
+  flag.textContent = "";
+  renderParsePreview();
+  document.getElementById("parsePreviewTable").style.display = "";
+  document.getElementById("parseCommitRow").style.display = "";
+  document.getElementById("parseCount").textContent = parsedRows.length;
+}
+
+function renderParsePreview() {
+  document.getElementById("parsePreviewBody").innerHTML = parsedRows.map((r,i) => `
+    <tr>
+      <td><input type="text" value="${r.title}" onchange="parsedRows[${i}].title=this.value"></td>
+      <td><input type="text" value="${r.make}" onchange="parsedRows[${i}].make=this.value"></td>
+      <td><input type="text" value="${r.model}" onchange="parsedRows[${i}].model=this.value"></td>
+      <td><input type="number" value="${r.year}" onchange="parsedRows[${i}].year=parseInt(this.value)"></td>
+      <td><input type="number" value="${r.mileage}" onchange="parsedRows[${i}].mileage=parseFloat(this.value)"></td>
+      <td><input type="number" value="${r.price}" onchange="parsedRows[${i}].price=parseFloat(this.value)"></td>
+      <td><button class="del-btn" onclick="removeParsedRow(${i})">&times;</button></td>
+    </tr>`).join("");
+}
+function removeParsedRow(i) {
+  parsedRows.splice(i,1);
+  renderParsePreview();
+  document.getElementById("parseCount").textContent = parsedRows.length;
+  if (parsedRows.length === 0) {
+    document.getElementById("parsePreviewTable").style.display = "none";
+    document.getElementById("parseCommitRow").style.display = "none";
+  }
+}
+
+async function commitPaste() {
+  const flag = document.getElementById("parseFlag");
+  if (!backendUrl) { flag.textContent = "Connect to the backend first."; return; }
+  try {
+    const result = await apiPost({action: "addBulk", rows: parsedRows, source: "ksl"});
+    if (!result.ok) throw new Error(result.error || "add failed");
+    flag.textContent = `Added ${result.added} new listing${result.added===1?"":"s"}; skipped ${result.skipped} already in the tracker.`;
+    parsedRows = [];
+    document.getElementById("pasteBox").value = "";
+    document.getElementById("parsePreviewTable").style.display = "none";
+    document.getElementById("parseCommitRow").style.display = "none";
+    await refreshFromServer();
+  } catch (err) {
+    flag.textContent = "Couldn't add: " + err.message;
+  }
+}
+
+// ---------- sort / chart / checker ----------
+
+function sortBy(field) {
+  if (sortField === field) sortDir = sortDir === "asc" ? "desc" : "asc";
+  else { sortField = field; sortDir = "asc"; }
+  renderDealsBody();
+}
+
+function populateSelects() {
+  const validKeys = Object.keys(groupStats).filter(k => !groupStats[k].tooSmall);
+  const chartSel = document.getElementById("chartModelSelect");
+  const checkSel = document.getElementById("checkModelSelect");
+  const prevChart = chartSel.value, prevCheck = checkSel.value;
+  const opts = validKeys.length ? validKeys.map(k => `<option value="${k}">${k}</option>`).join("")
+    : '<option value="">No model has 5+ clean listings yet</option>';
+  chartSel.innerHTML = opts; checkSel.innerHTML = opts;
+  if (validKeys.includes(prevChart)) chartSel.value = prevChart;
+  if (validKeys.includes(prevCheck)) checkSel.value = prevCheck;
+}
+
+function drawChart() {
+  const k = document.getElementById("chartModelSelect").value;
+  const ctx = document.getElementById("chart");
+  if (chart) { chart.destroy(); chart = null; }
+  if (!k || !groupStats[k] || groupStats[k].tooSmall) return;
+  const rows = data.filter(r => key(r.make, r.model) === k && !r.damaged);
+  const g = groupStats[k];
+  const points = rows.map(r => ({x: currentYear()-r.year, y: r.price}));
+  const minAge = Math.min(...rows.map(r=>currentYear()-r.year)), maxAge = Math.max(...rows.map(r=>currentYear()-r.year));
+  const linePoints = [{x:minAge, y:predictPrice(g,minAge,g.meanMileage)}, {x:maxAge, y:predictPrice(g,maxAge,g.meanMileage)}];
+  const lineLabel = g.fallback ? `Trend (age only, R² ${g.r2.toFixed(2)})` : `Trend at avg mileage ~${Math.round(g.meanMileage).toLocaleString()} (R² ${g.r2.toFixed(2)})`;
+  chart = new Chart(ctx, {
+    type: "scatter",
+    data: {datasets: [
+      {label: k + " (clean listings)", data: points, backgroundColor: "#2563eb", pointRadius: 5},
+      {label: lineLabel, data: linePoints, type: "line", borderColor: "#16a34a", borderWidth: 2, pointRadius: 0, fill: false}
+    ]},
+    options: {responsive: true, plugins: {legend: {position: "bottom"}},
+      scales: {x: {title: {display: true, text: "Age (years)"}}, y: {title: {display: true, text: "Price ($)"}}}}
+  });
+}
+
+function checkListing() {
+  const k = document.getElementById("checkModelSelect").value;
+  const year = parseFloat(document.getElementById("checkYear").value);
+  const mileage = parseFloat(document.getElementById("checkMileage").value);
+  const price = parseFloat(document.getElementById("checkPrice").value);
+  const box = document.getElementById("verdictBox");
+  box.className = "verdict show";
+  if (!k || !groupStats[k] || groupStats[k].tooSmall) {
+    box.className = "verdict show neutral";
+    box.textContent = "No model selected, or that model doesn't have 5+ clean comps yet.";
+    return;
+  }
+  if (isNaN(year) || isNaN(mileage) || isNaN(price)) {
+    box.className = "verdict show neutral";
+    box.textContent = "Enter year, mileage, and asking price.";
+    return;
+  }
+  const g = groupStats[k];
+  const age = currentYear() - year;
+  const predicted = predictPrice(g, age, mileage);
+  const diff = price - predicted;
+  const pctOff = predicted !== 0 ? (diff/predicted)*100 : 0;
+  let note = g.weak ? ` Trend is weak (R² ${g.r2.toFixed(2)}) — treat as rough.` : "";
+  if (g.thin) note += " Small sample — take the number loosely.";
+  if (diff < -300) {
+    box.className = "verdict show good";
+    box.textContent = `$${Math.abs(Math.round(diff)).toLocaleString()} (${Math.abs(pctOff).toFixed(0)}%) below the ${k} trend at ${age} years old.${note}`;
+  } else if (diff > 300) {
+    box.className = "verdict show bad";
+    box.textContent = `$${Math.round(diff).toLocaleString()} (${pctOff.toFixed(0)}%) above the ${k} trend.${note}`;
+  } else {
+    box.className = "verdict show neutral";
+    box.textContent = `Roughly in line with the ${k} trend (predicted ~$${Math.round(predicted).toLocaleString()}).${note}`;
+  }
+}
+
+// ---------- init ----------
+
+(function init() {
+  let saved = "";
+  try { saved = localStorage.getItem("car_tracker_backend_url") || ""; } catch (e) {}
+  if (saved) {
+    document.getElementById("backendUrl").value = saved;
+    backendUrl = saved;
+    refreshFromServer();
+  }
+})();
+</script>
+</body>
+</html>
