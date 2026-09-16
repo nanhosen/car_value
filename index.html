@@ -452,7 +452,7 @@ function buildRows(valid) {
 }
 
 function renderTopDeals() {
-  const ranked = lastValidRows.filter(r => r.zscore !== null && r.status !== "passed")
+  const ranked = lastValidRows.filter(r => r.zscore !== null && r.status !== "passed" && !r.damaged)
     .slice().sort((a,b) => a.zscore - b.zscore).slice(0, 8);
   const body = document.getElementById("topDealsBody");
   if (!body) return;
