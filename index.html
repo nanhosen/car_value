@@ -291,7 +291,8 @@ function setConnStatus(text, cls) {
 }
 
 function connectBackend() {
-  const url = document.getElementById("backendUrl").value.trim();
+  // const url = document.getElementById("backendUrl").value.trim();
+  const url = 'https://script.google.com/macros/s/AKfycbxcEJu8p8Zi0_PIQyKtu6TOb4uBubuXFTaeNVQsApqbPx07sc3873dMRJ3stmyVv4E6/exec'
   if (!url) { setConnStatus("Enter a Web App URL first.", "conn-bad"); return; }
   backendUrl = url;
   try { localStorage.setItem("car_tracker_backend_url", url); } catch (e) {}
@@ -904,7 +905,10 @@ function checkListing() {
     backendUrl = saved;
     refreshFromServer();
   }
-})();
+  else{
+    connectBackend()
+  }
+)();
 </script>
 </body>
 </html>
