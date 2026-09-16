@@ -191,7 +191,7 @@
     <h2>Top deals across everything</h2>
     <p class="note" style="margin-top:0">Ranked by standard deviations below each listing's own model trend — this is what makes a Corolla deal and a Civic deal comparable.</p>
     <table>
-      <thead><tr><th>Listing</th><th>Make</th><th>Model</th><th>Price</th><th>vs. everything</th></tr></thead>
+      <thead><tr><th>Listing</th><th>Make</th><th>Model</th><th>Status</th><th>Price</th><th>vs. everything</th></tr></thead>
       <tbody id="topDealsBody"></tbody>
     </table>
   </div>
@@ -459,7 +459,7 @@ function renderTopDeals() {
   body.innerHTML = ranked.map(r => {
     const label = r.title && r.title.trim() ? r.title : `${r.year} ${r.make} ${r.model}`;
     return `<tr onclick="openEdit('${r.id}')" style="cursor:pointer">
-      <td>${label}</td><td>${r.make}</td><td>${r.model}</td>
+      <td>${label}</td><td>${r.make}</td><td>${r.model}</td><td>${r.status}</td>
       <td>$${r.price.toLocaleString()}</td>
       <td><span class="badge badge-good">${r.zscore.toFixed(1)}σ below</span></td>
     </tr>`;
