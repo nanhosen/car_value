@@ -635,7 +635,7 @@ function renderMakeFilterOptions(makes) {
   const panel = document.getElementById("makeFilterOptions");
   const actions = `<div class="msp-actions"><a onclick="selectAllMakes()">All</a><a onclick="clearMakeFilter()">None</a></div>`;
   const list = makes.length
-    ? makes.map(m => `<label><input type="checkbox" ${selectedMakes.has(m)?"checked":""} onchange="toggleMakeFilter(${JSON.stringify(m)}, this.checked)"> ${m}</label>`).join("")
+    ? makes.map(m => `<label><input type="checkbox" ${selectedMakes.has(m)?"checked":""} onchange="toggleMakeFilter('${m.replace(/'/g,"\\'")}', this.checked)"> ${m}</label>`).join("")
     : '<div class="empty" style="font-size:0.8rem;">No listings yet</div>';
   panel.innerHTML = actions + list;
   updateMakeSummary();
@@ -645,7 +645,7 @@ function renderModelFilterOptions(models) {
   const panel = document.getElementById("modelFilterOptions");
   const actions = `<div class="msp-actions"><a onclick="selectAllModels()">All</a><a onclick="clearModelFilter()">None</a></div>`;
   const list = models.length
-    ? models.map(m => `<label><input type="checkbox" ${selectedModels.has(m)?"checked":""} onchange="toggleModelFilter(${JSON.stringify(m)}, this.checked)"> ${m}</label>`).join("")
+    ? models.map(m => `<label><input type="checkbox" ${selectedModels.has(m)?"checked":""} onchange="toggleModelFilter('${m.replace(/'/g,"\\'")}', this.checked)"> ${m}</label>`).join("")
     : '<div class="empty" style="font-size:0.8rem;">No matching models</div>';
   panel.innerHTML = actions + list;
   updateModelSummary();
