@@ -79,6 +79,23 @@
   .add-form > div { display: flex; flex-direction: column; gap: 3px; }
   .add-form label { font-size: 0.72rem; color: var(--muted); }
   .checkbox-cell { text-align: center; }
+  .multiselect { position: relative; }
+  .multiselect summary {
+    cursor: pointer; padding: 6px 7px; border: 1px solid var(--border); border-radius: 6px;
+    background: #fbfbfd; font-size: 0.85rem; list-style: none; user-select: none; color: var(--text);
+  }
+  .multiselect summary::-webkit-details-marker { display: none; }
+  .multiselect summary::after { content: "▾"; float: right; color: var(--muted); margin-left: 6px; }
+  .multiselect[open] summary::after { content: "▴"; }
+  .multiselect-panel {
+    position: absolute; z-index: 20; background: white; border: 1px solid var(--border); border-radius: 8px;
+    margin-top: 4px; padding: 8px; max-height: 240px; overflow-y: auto; min-width: 190px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+  }
+  .multiselect-panel label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; padding: 3px 2px; white-space: nowrap; color: var(--text); }
+  .multiselect-panel input[type=checkbox] { width: auto; }
+  .msp-actions { display: flex; gap: 10px; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); font-size: 0.76rem; }
+  .msp-actions a { color: var(--accent); cursor: pointer; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -172,8 +189,18 @@
       <button class="danger" onclick="clearAllConfirm()">Clear all (everyone)</button>
     </div>
     <div class="add-form" style="margin-bottom:12px;">
-      <div><label>Make contains</label><input type="text" id="fMake" oninput="renderDealsBody()" placeholder="e.g. Toyota"></div>
-      <div><label>Model contains</label><input type="text" id="fModel" oninput="renderDealsBody()" placeholder="e.g. Camry"></div>
+      <div><label>Make</label>
+        <details class="multiselect" id="makeFilterDetails">
+          <summary id="makeFilterSummary">Make</summary>
+          <div class="multiselect-panel" id="makeFilterOptions"></div>
+        </details>
+      </div>
+      <div><label>Model</label>
+        <details class="multiselect" id="modelFilterDetails">
+          <summary id="modelFilterSummary">Model</summary>
+          <div class="multiselect-panel" id="modelFilterOptions"></div>
+        </details>
+      </div>
       <div><label>Year: from</label><input type="number" id="fYearMin" oninput="renderDealsBody()" placeholder="e.g. 2012"></div>
       <div><label>Year: to</label><input type="number" id="fYearMax" oninput="renderDealsBody()"></div>
       <div><label>Max mileage</label><input type="number" id="fMileageMax" oninput="renderDealsBody()" placeholder="e.g. 200000"></div>
@@ -309,6 +336,8 @@ let groupStats = {};    // key -> regression fit for that make/model (clean comp
 let lastValidRows = [];
 let sortField = "pctOff";
 let sortDir = "asc";
+let selectedMakes = new Set();
+let selectedModels = new Set();
 let chart = null;
 let allChart = null;
 let parsedRows = [];
@@ -567,6 +596,7 @@ function recompute() {
   });
 
   renderGroupSummary();
+  populateMakeModelFilters();
   buildRows(valid);
   populateSelects();
   drawChart();
@@ -590,10 +620,97 @@ function buildRows(valid) {
   renderTopDeals();
 }
 
+function populateMakeModelFilters() {
+  const allMakes = [...new Set(data.map(r => r.make).filter(Boolean))].sort();
+  selectedMakes = new Set([...selectedMakes].filter(m => allMakes.includes(m)));
+  renderMakeFilterOptions(allMakes);
+
+  const relevant = selectedMakes.size > 0 ? data.filter(r => selectedMakes.has(r.make)) : data;
+  const allModels = [...new Set(relevant.map(r => r.model).filter(Boolean))].sort();
+  selectedModels = new Set([...selectedModels].filter(m => allModels.includes(m)));
+  renderModelFilterOptions(allModels);
+}
+
+function renderMakeFilterOptions(makes) {
+  const panel = document.getElementById("makeFilterOptions");
+  const actions = `<div class="msp-actions"><a onclick="selectAllMakes()">All</a><a onclick="clearMakeFilter()">None</a></div>`;
+  const list = makes.length
+    ? makes.map(m => `<label><input type="checkbox" ${selectedMakes.has(m)?"checked":""} onchange="toggleMakeFilter(${JSON.stringify(m)}, this.checked)"> ${m}</label>`).join("")
+    : '<div class="empty" style="font-size:0.8rem;">No listings yet</div>';
+  panel.innerHTML = actions + list;
+  updateMakeSummary();
+}
+
+function renderModelFilterOptions(models) {
+  const panel = document.getElementById("modelFilterOptions");
+  const actions = `<div class="msp-actions"><a onclick="selectAllModels()">All</a><a onclick="clearModelFilter()">None</a></div>`;
+  const list = models.length
+    ? models.map(m => `<label><input type="checkbox" ${selectedModels.has(m)?"checked":""} onchange="toggleModelFilter(${JSON.stringify(m)}, this.checked)"> ${m}</label>`).join("")
+    : '<div class="empty" style="font-size:0.8rem;">No matching models</div>';
+  panel.innerHTML = actions + list;
+  updateModelSummary();
+}
+
+function updateMakeSummary() {
+  document.getElementById("makeFilterSummary").textContent = selectedMakes.size > 0 ? `Make (${selectedMakes.size})` : "Make";
+}
+function updateModelSummary() {
+  document.getElementById("modelFilterSummary").textContent = selectedModels.size > 0 ? `Model (${selectedModels.size})` : "Model";
+}
+
+function toggleMakeFilter(make, checked) {
+  if (checked) selectedMakes.add(make); else selectedMakes.delete(make);
+  updateMakeSummary();
+  const relevant = selectedMakes.size > 0 ? data.filter(r => selectedMakes.has(r.make)) : data;
+  const allModels = [...new Set(relevant.map(r => r.model).filter(Boolean))].sort();
+  selectedModels = new Set([...selectedModels].filter(m => allModels.includes(m)));
+  renderModelFilterOptions(allModels);
+  renderDealsBody(); renderTopDeals();
+}
+
+function toggleModelFilter(model, checked) {
+  if (checked) selectedModels.add(model); else selectedModels.delete(model);
+  updateModelSummary();
+  renderDealsBody(); renderTopDeals();
+}
+
+function selectAllMakes() {
+  const allMakes = [...new Set(data.map(r => r.make).filter(Boolean))];
+  selectedMakes = new Set(allMakes);
+  const relevant = data.filter(r => selectedMakes.has(r.make));
+  renderMakeFilterOptions(allMakes.sort());
+  renderModelFilterOptions([...new Set(relevant.map(r => r.model).filter(Boolean))].sort());
+  renderDealsBody(); renderTopDeals();
+}
+function clearMakeFilter() {
+  selectedMakes = new Set();
+  renderMakeFilterOptions([...new Set(data.map(r => r.make).filter(Boolean))].sort());
+  renderModelFilterOptions([...new Set(data.map(r => r.model).filter(Boolean))].sort());
+  renderDealsBody(); renderTopDeals();
+}
+function selectAllModels() {
+  const relevant = selectedMakes.size > 0 ? data.filter(r => selectedMakes.has(r.make)) : data;
+  const allModels = [...new Set(relevant.map(r => r.model).filter(Boolean))];
+  selectedModels = new Set(allModels);
+  renderModelFilterOptions(allModels.sort());
+  renderDealsBody(); renderTopDeals();
+}
+function clearModelFilter() {
+  selectedModels = new Set();
+  const relevant = selectedMakes.size > 0 ? data.filter(r => selectedMakes.has(r.make)) : data;
+  renderModelFilterOptions([...new Set(relevant.map(r => r.model).filter(Boolean))].sort());
+  renderDealsBody(); renderTopDeals();
+}
+
+// close the dropdown panels when clicking outside them
+document.addEventListener("click", (e) => {
+  document.querySelectorAll(".multiselect[open]").forEach(el => {
+    if (!el.contains(e.target)) el.removeAttribute("open");
+  });
+});
+
 function applyFilters(rows) {
   const get = id => document.getElementById(id).value.trim();
-  const makeF = get("fMake").toLowerCase();
-  const modelF = get("fModel").toLowerCase();
   const yearMin = get("fYearMin"), yearMax = get("fYearMax");
   const mileageMax = get("fMileageMax");
   const priceMax = get("fPriceMax");
@@ -605,8 +722,8 @@ function applyFilters(rows) {
   return rows.filter(r => {
     if (hidePassed && r.status === "passed") return false;
     if (interestedOnly && !r.interested) return false;
-    if (makeF && !r.make.toLowerCase().includes(makeF)) return false;
-    if (modelF && !r.model.toLowerCase().includes(modelF)) return false;
+    if (selectedMakes.size > 0 && !selectedMakes.has(r.make)) return false;
+    if (selectedModels.size > 0 && !selectedModels.has(r.model)) return false;
     if (yearMin !== "" && r.year < Number(yearMin)) return false;
     if (yearMax !== "" && r.year > Number(yearMax)) return false;
     if (mileageMax !== "" && r.mileage > Number(mileageMax)) return false;
@@ -655,10 +772,14 @@ function renderGroupSummary() {
 }
 
 function clearFilters() {
-  ["fMake","fModel","fYearMin","fYearMax","fMileageMax","fPriceMax"].forEach(id => document.getElementById(id).value = "");
+  ["fYearMin","fYearMax","fMileageMax","fPriceMax"].forEach(id => document.getElementById(id).value = "");
   document.querySelectorAll(".fStatusCheck").forEach(el => el.checked = false);
   document.getElementById("fDamaged").value = "";
   document.getElementById("interestedOnlyCheck").checked = false;
+  selectedMakes = new Set();
+  selectedModels = new Set();
+  renderMakeFilterOptions([...new Set(data.map(r => r.make).filter(Boolean))].sort());
+  renderModelFilterOptions([...new Set(data.map(r => r.model).filter(Boolean))].sort());
   renderDealsBody();
   renderTopDeals();
 }
